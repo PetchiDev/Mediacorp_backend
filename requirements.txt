@@ -11,3 +11,6 @@ passlib[bcrypt]
 pytest
 httpx
 loguru
+boto3
+asyncpg
+python-magic

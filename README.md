@@ -36,3 +36,20 @@ Professional Python Backend for Mediacorp.
    ```bash
    uvicorn src.main:app --reload
    ```
+## API Documentation
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| GET | `/health` | Service health check | `{"status": "healthy", ...}` |
+| POST | `/api/v1/upload` | Initiate media upload (get presigned URL) | `UploadResponse` |
+
+### Example Request
+```bash
+curl -X POST "http://localhost:8000/api/v1/upload" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "filename": "my_video.mp4",
+           "file_size": 1048576,
+           "content_type": "video/mp4"
+         }'
+```
