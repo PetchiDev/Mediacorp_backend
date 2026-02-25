@@ -34,7 +34,7 @@ class UploadService:
             object_key = f"incoming/{timestamp}/{upload_id}/{request.filename}"
             
             # 3. S3 Integration
-            presigned_result = generate_presigned_url(
+            presigned_result = await generate_presigned_url(
                 bucket=settings.S3_BUCKET,
                 object_key=object_key,
                 file_size=request.file_size,

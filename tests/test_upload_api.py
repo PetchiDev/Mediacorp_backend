@@ -53,3 +53,26 @@ def test_create_upload_too_large(client):
     
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "File size exceeds limit" in response.json()["detail"]
+
+@patch("src.services.s3_service.s3_client.generate_presigned_url")
+def test_bulk_upload_success(mock_s3, client):
+    """Test successful bulk upload initiation."""
+    mock_s3.return_value = "http://mock-url"
+    
+    bulk_data = {
+        "uploads": [
+            {"filename": "v1.mp4", "file_size": 100, "content_type": "video/mp4"},
+            {"filename": "v2.mp4", "file_size": 200, "content_type": "video/mp4"}
+        ]
+    }
+    
+    response = client.post("/api/v1/bulk-upload", json=bulk_data)
+    assert response.status_code == status.HTTP_201_CREATED
+    assert len(response.json()["results"]) == 2
+
+def test_bulk_upload_empty_list(client):
+    """Test behavior with empty upload list."""
+    # The schema requires a list, so we pass an empty list.
+    response = client.post("/api/v1/bulk-upload", json={"uploads": []})
+    assert response.status_code == status.HTTP_201_CREATED
+    assert len(response.json()["results"]) == 0

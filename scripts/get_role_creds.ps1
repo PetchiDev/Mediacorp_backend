@@ -11,6 +11,7 @@ if (Test-Path $envPath) {
         if ($_ -match "^AWS_SECRET_ACCESS_KEY=(.+)") { $env:AWS_SECRET_ACCESS_KEY = $matches[1].Trim() }
     }
 }
+$env:AWS_SESSION_TOKEN = "" # Clear old session token to prevent InvalidClientTokenId
 
 Write-Host "Assuming role $ROLE_ARN..." -ForegroundColor Cyan
 
