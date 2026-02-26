@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any
 from uuid import UUID
 
+
 class UploadRequest(BaseModel):
     """Rule 3.5: Request schema for initiating an upload."""
     filename: str = Field(..., description="The name of the file to be uploaded")
