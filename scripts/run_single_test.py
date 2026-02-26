@@ -43,10 +43,10 @@ def test_upload():
             )
             upload_response.raise_for_status()
             
-        print("✅ SUCCESS: File uploaded successfully to S3!")
+        print(" SUCCESS: File uploaded successfully to S3!")
         
     except Exception as e:
-        print(f"❌ FAILED: {e}")
+        print(f" FAILED: {e}")
         if hasattr(e, 'response') and e.response is not None:
             print(f"Detail: {e.response.text}")
 

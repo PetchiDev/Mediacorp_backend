@@ -23,7 +23,7 @@ def test_bulk_upload():
     response = requests.post(f"{BASE_URL}/bulk-upload", json=payload)
     
     if response.status_code == 201:
-        print("✅ Bulk upload initiation successful!")
+        print(" Bulk upload initiation successful!")
         results = response.json().get("results", [])
         for i, res in enumerate(results):
             print(f"\nFile {i+1}:")
@@ -31,7 +31,7 @@ def test_bulk_upload():
             print(f"  Object Key: {res['object_key']}")
             print(f"  Presigned URL/ID: {res['presigned_url'][:50]}...")
     else:
-        print(f"❌ Failed! Status Code: {response.status_code}")
+        print(f" Failed! Status Code: {response.status_code}")
         print(response.text)
 
 if __name__ == "__main__":

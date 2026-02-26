@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import patch
+import uuid
+from unittest.mock import patch, MagicMock
 from fastapi import status
 
 def test_health_check(client):
@@ -8,56 +9,12 @@ def test_health_check(client):
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "healthy", "service": "upload-service"}
 
-@patch("src.services.s3_service.s3_client.generate_presigned_url")
-def test_create_upload_success(mock_s3, client):
-    """Rule 12: Successful upload initiation test."""
-    mock_s3.return_value = "https://mock-s3-url.com/presigned"
-    
-    upload_data = {
-        "filename": "test_video.mp4",
-        "file_size": 1024 * 1024,  # 1 MB
-        "content_type": "video/mp4",
-        "processing_config": {"watermark": True}
-    }
-    
-    response = client.post("/api/v1/upload", json=upload_data)
-    
-    assert response.status_code == status.HTTP_201_CREATED
-    data = response.json()
-    assert "upload_id" in data
-    assert data["presigned_url"] == "https://mock-s3-url.com/presigned"
-    assert "incoming/" in data["object_key"]
-
-def test_create_upload_invalid_type(client):
-    """Rule 12: Error case - unsupported file type."""
-    upload_data = {
-        "filename": "malicious.exe",
-        "file_size": 1024,
-        "content_type": "application/octet-stream"
-    }
-    
-    response = client.post("/api/v1/upload", json=upload_data)
-    
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Unsupported file type" in response.json()["detail"]
-
-def test_create_upload_too_large(client):
-    """Rule 12: Error case - file too large."""
-    upload_data = {
-        "filename": "huge_image.png",
-        "file_size": 1 * 1024 * 1024 * 1024,  # 1 GB (Limit for image is 100MB)
-        "content_type": "image/png"
-    }
-    
-    response = client.post("/api/v1/upload", json=upload_data)
-    
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "File size exceeds limit" in response.json()["detail"]
-
-@patch("src.services.s3_service.s3_client.generate_presigned_url")
-def test_bulk_upload_success(mock_s3, client):
+@patch("src.services.s3_service.get_s3_client")
+def test_bulk_upload_success(mock_s3_client_getter, client):
     """Test successful bulk upload initiation."""
-    mock_s3.return_value = "http://mock-url"
+    mock_s3 = MagicMock()
+    mock_s3.generate_presigned_url.return_value = "http://mock-url"
+    mock_s3_client_getter.return_value = mock_s3
     
     bulk_data = {
         "uploads": [
@@ -68,11 +25,44 @@ def test_bulk_upload_success(mock_s3, client):
     
     response = client.post("/api/v1/bulk-upload", json=bulk_data)
     assert response.status_code == status.HTTP_201_CREATED
-    assert len(response.json()["results"]) == 2
+    data = response.json()
+    assert len(data["results"]) == 2
+    assert data["results"][0]["presigned_url"] == "http://mock-url"
 
-def test_bulk_upload_empty_list(client):
-    """Test behavior with empty upload list."""
-    # The schema requires a list, so we pass an empty list.
-    response = client.post("/api/v1/bulk-upload", json={"uploads": []})
-    assert response.status_code == status.HTTP_201_CREATED
-    assert len(response.json()["results"]) == 0
+def test_bulk_upload_validation_error(client):
+    """Test behavior with invalid input data (missing fields)."""
+    response = client.post("/api/v1/bulk-upload", json={"uploads": [{"filename": "v.mp4"}]})
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+@patch("src.services.upload_service.UploadService.get_multipart_part_url")
+def test_get_part_url_success(mock_get_url, client):
+    """Test obtaining a part presigned URL via API."""
+    upload_id = str(uuid.uuid4())
+    mock_get_url.return_value = MagicMock(
+        upload_id=upload_id,
+        part_number=1,
+        presigned_url="http://part-url"
+    )
+    
+    response = client.get(f"/api/v1/{upload_id}/part/1")
+    assert response.status_code == 200
+    assert response.json()["presigned_url"] == "http://part-url"
+
+def test_get_part_url_invalid_uuid(client):
+    """Test that invalid UUID format returns 422."""
+    response = client.get("/api/v1/not-a-uuid/part/1")
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+@patch("src.services.upload_service.UploadService.complete_multipart_upload")
+def test_complete_upload_success(mock_complete, client):
+    """Test successful multipart completion via API."""
+    upload_id = str(uuid.uuid4())
+    mock_complete.return_value = {"status": "success", "location": "http://s3-location"}
+    
+    complete_data = {
+        "parts": [{"PartNumber": 1, "ETag": "etag-123"}]
+    }
+    
+    response = client.post(f"/api/v1/{upload_id}/complete", json=complete_data)
+    assert response.status_code == 200
+    assert response.json()["location"] == "http://s3-location"

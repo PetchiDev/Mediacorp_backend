@@ -1,84 +1,72 @@
 # PowerShell script to assume IAM role and update .env
 $ROLE_ARN = "arn:aws:iam::413426654981:role/RoleSwitch-DevmetadataExternaluser"
 $SESSION_NAME = "MaranSession"
-$MFA_SERIAL = "arn:aws:iam::276824211313:mfa/samsung" # Update this if different
+$MFA_SERIAL = "arn:aws:iam::276824211313:mfa/samsung"
 
-# 1. Load existing credentials from .env to sign the request
 $envPath = ".env"
+$baseAccessKey = ""
+$baseSecretKey = ""
+
+# 1. Load PERMANENT credentials from .env
 if (Test-Path $envPath) {
     Get-Content $envPath | ForEach-Object {
-        if ($_ -match "^AWS_ACCESS_KEY_ID=(.+)") { $env:AWS_ACCESS_KEY_ID = $matches[1].Trim() }
-        if ($_ -match "^AWS_SECRET_ACCESS_KEY=(.+)") { $env:AWS_SECRET_ACCESS_KEY = $matches[1].Trim() }
+        if ($_ -match "^BASE_AWS_ACCESS_KEY_ID=(.+)") { $baseAccessKey = $matches[1].Trim() }
+        if ($_ -match "^BASE_AWS_SECRET_ACCESS_KEY=(.+)") { $baseSecretKey = $matches[1].Trim() }
     }
 }
-$env:AWS_SESSION_TOKEN = "" # Clear old session token to prevent InvalidClientTokenId
 
-Write-Host "Assuming role $ROLE_ARN..." -ForegroundColor Cyan
+if (-not $baseAccessKey -or -not $baseSecretKey) {
+    Write-Host "[WARNING] BASE_AWS_ACCESS_KEY_ID or BASE_AWS_SECRET_ACCESS_KEY not found in .env" -ForegroundColor Red
+    Write-Host "Please ensure your Permanent keys (AKIA...) are saved with 'BASE_' prefix in .env" -ForegroundColor Yellow
+    exit
+}
 
-# 2. Get MFA token if needed
+Write-Host "[KEY] Using Permanent Keys for authentication: $baseAccessKey" -ForegroundColor Gray
+
+# 2. Get MFA token
 $mfaToken = Read-Host "Enter MFA Token (leave blank if not required)"
 
 # 3. Run AWS command
 try {
+    # Set temporary environment variables for the AWS CLI call
+    $env:AWS_ACCESS_KEY_ID = $baseAccessKey
+    $env:AWS_SECRET_ACCESS_KEY = $baseSecretKey
+    $env:AWS_SESSION_TOKEN = ""
+
     if ($mfaToken) {
         $result = aws sts assume-role --role-arn $ROLE_ARN --role-session-name $SESSION_NAME --serial-number $MFA_SERIAL --token-code $mfaToken | ConvertFrom-Json
     }
     else {
         $result = aws sts assume-role --role-arn $ROLE_ARN --role-session-name $SESSION_NAME | ConvertFrom-Json
     }
+    
+    # CLEAR THEM IMMEDIATELY
+    $env:AWS_ACCESS_KEY_ID = ""
+    $env:AWS_SECRET_ACCESS_KEY = ""
 }
 catch {
-    Write-Host "Error: Unable to assume role. Check your base credentials in .env or MFA token." -ForegroundColor Red
+    Write-Host "[ERROR] Unable to assume role. Check your MFA token or if BASE keys are still valid." -ForegroundColor Red
     exit
 }
 
 if ($result.Credentials) {
-    $AccessKeyId = $result.Credentials.AccessKeyId
-    $SecretAccessKey = $result.Credentials.SecretAccessKey
-    $SessionToken = $result.Credentials.SessionToken
+    $tempAccessKey = $result.Credentials.AccessKeyId
+    $tempSecretKey = $result.Credentials.SecretAccessKey
+    $tempSessionToken = $result.Credentials.SessionToken
 
-    Write-Host "Successfully obtained temporary credentials!" -ForegroundColor Green
+    Write-Host "[SUCCESS] Successfully obtained temporary credentials!" -ForegroundColor Green
 
-    # Read .env file
-    $envPath = ".env"
-    if (Test-Path $envPath) {
-        $content = Get-Content $envPath
-        
-        # Update or add credentials
-        $newContent = @()
-        $foundAccess = $false
-        $foundSecret = $false
-        $foundToken = $false
-
-        foreach ($line in $content) {
-            if ($line -match "^AWS_ACCESS_KEY_ID=") {
-                $newContent += "AWS_ACCESS_KEY_ID=$AccessKeyId"
-                $foundAccess = $true
-            }
-            elseif ($line -match "^AWS_SECRET_ACCESS_KEY=") {
-                $newContent += "AWS_SECRET_ACCESS_KEY=$SecretAccessKey"
-                $foundSecret = $true
-            }
-            elseif ($line -match "^AWS_SESSION_TOKEN=") {
-                $newContent += "AWS_SESSION_TOKEN=$SessionToken"
-                $foundToken = $true
-            }
-            else {
-                $newContent += $line
-            }
-        }
-
-        if (-not $foundAccess) { $newContent += "AWS_ACCESS_KEY_ID=$AccessKeyId" }
-        if (-not $foundSecret) { $newContent += "AWS_SECRET_ACCESS_KEY=$SecretAccessKey" }
-        if (-not $foundToken) { $newContent += "AWS_SESSION_TOKEN=$SessionToken" }
-
-        $newContent | Set-Content $envPath
-        Write-Host ".env file updated successfully." -ForegroundColor Yellow
+    # 4. Update .env file (Only update the ones the app uses, leave BASE_ keys alone)
+    $content = Get-Content $envPath
+    $newContent = @()
+    
+    foreach ($line in $content) {
+        if ($line -match "^AWS_ACCESS_KEY_ID=") { $newContent += "AWS_ACCESS_KEY_ID=$tempAccessKey" }
+        elseif ($line -match "^AWS_SECRET_ACCESS_KEY=") { $newContent += "AWS_SECRET_ACCESS_KEY=$tempSecretKey" }
+        elseif ($line -match "^AWS_SESSION_TOKEN=") { $newContent += "AWS_SESSION_TOKEN=$tempSessionToken" }
+        else { $newContent += $line }
     }
-    else {
-        Write-Host "Warning: .env file not found. Please create one." -ForegroundColor Red
-    }
-}
-else {
-    Write-Host "Error: Failed to get credentials from AWS." -ForegroundColor Red
+
+    $newContent | Set-Content $envPath
+    Write-Host "Success: .env file updated with Temporary Session! You can now run the app/tests." -ForegroundColor Yellow
 }

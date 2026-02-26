@@ -10,7 +10,18 @@ class UploadRepository:
         self.db = db
 
     def create_content_record(self, **kwargs) -> ContentInventory:
-        """Create a new record in content_inventory."""
+        """
+        Create a new entry in the content_inventory table.
+        
+        Args:
+            **kwargs: Column values for the ContentInventory model.
+            
+        Returns:
+            The created ContentInventory ORM object.
+            
+        Raises:
+            Exception: If the database insertion fails.
+        """
         try:
             db_item = ContentInventory(**kwargs)
             self.db.add(db_item)
@@ -23,11 +34,29 @@ class UploadRepository:
             raise
 
     def get_content_by_id(self, content_id: uuid.UUID) -> Optional[ContentInventory]:
-        """Fetch content record by ID."""
+        """
+        Retrieve a content record by its unique UUID.
+        
+        Args:
+            content_id: UUID of the media content.
+            
+        Returns:
+            ContentInventory object if found, else None.
+        """
         return self.db.query(ContentInventory).filter(ContentInventory.content_id == content_id).first()
 
     def create_component_status(self, content_id: uuid.UUID, component: str, status: str = "pending") -> ComponentStatus:
-        """Initialize status for a processing component."""
+        """
+        Initialize the processing state for a specific backend component.
+        
+        Args:
+            content_id: UUID of the media content.
+            component: Name of the processing component (e.g., transcription).
+            status: Initial status string.
+            
+        Returns:
+            The created ComponentStatus ORM object.
+        """
         try:
             db_item = ComponentStatus(
                 content_id=content_id,
@@ -44,7 +73,16 @@ class UploadRepository:
             raise
 
     def update_status(self, content_id: uuid.UUID, status: str):
-        """Update the overall status of a content record."""
+        """
+        Atomically update the overall ingestion status of a content record.
+        
+        Args:
+            content_id: UUID of the media content.
+            status: New status string (e.g., 'uploaded').
+            
+        Returns:
+            The updated ContentInventory object.
+        """
         db_item = self.get_content_by_id(content_id)
         if db_item:
             db_item.status = status

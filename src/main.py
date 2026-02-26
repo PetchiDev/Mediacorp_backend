@@ -8,8 +8,27 @@ from src.core.logging import logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Manage the lifecycle of the FastAPI application.
+    - On startup: Initializes database tables and logs AWS configuration hints.
+    - On shutdown: Performs clean shutdown logging.
+    """
     # Rule 9: Create tables in dev (In prod use Alembic)
-    logger.info("Starting up: Creating database tables...")
+    logger.info("Starting up Mediacorp Backend...")
+    logger.info(f"S3 Bucket: {settings.S3_BUCKET}")
+    logger.info(f"AWS Region: {settings.AWS_REGION}")
+    
+    logger.info("Dumping AWS Settings for verification:")
+    for attr in dir(settings):
+        if "AWS" in attr and not attr.startswith("_"):
+            val = getattr(settings, attr)
+            if val:
+                hint = str(val)[:5] + "..." if isinstance(val, str) else val
+                logger.info(f"  {attr}: {hint}")
+            else:
+                logger.info(f"  {attr}: NONE")
+                
+    logger.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     yield
     logger.info("Shutting down...")
@@ -40,4 +59,5 @@ async def health_check():
 
 @app.get("/")
 async def root():
+    """Root endpoint providing a welcome message."""
     return {"message": "Welcome to Mediacorp Backend API"}
