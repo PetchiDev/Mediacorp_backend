@@ -83,3 +83,26 @@ The project utilizes `pytest` for both unit and integration testing.
 - **STS Role Assumption**: Temporary credentials are used for all cloud interactions.
 - **Input Validation**: Zero-trust approach with mandatory Pydantic schema validation for ALL requests.
 - **CORS Hardening**: Strict header exposure (e.g., ETag) restricted to verified origins.
+
+## 🔐 Authorization
+
+The platform uses AWS Cognito for group-based authorization. API Gateway extracts group information from the Cognito token and forwards it to the FastAPI backend via a header.
+
+### User Groups
+- `mdm-admins`: Full access to all endpoints.
+- `mdm-editors`: Access to read and modify content, but no admin access.
+- `mdm-viewers`: Read-only access to content.
+
+### Local Testing
+When testing locally, you must manually provide the designated group header (default: `x-user-groups`).
+
+Example using `curl`:
+```bash
+curl -H "x-user-groups: mdm-admins" http://localhost:8000/api/v1/auth-test/admin-only
+```
+
+### Configuration
+Auth settings are managed in `src/core/config.py` and `.env`:
+- `COGNITO_USERPOOL_ID`
+- `COGNITO_CLIENT_ID`
+- `COGNITO_GROUPS_HEADER` (default: `x-user-groups`)

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     
     ALLOWED_ORIGINS: List[str] = ["*"]
 
+    # Cognito Configuration
+    COGNITO_USERPOOL_ID: str = "ap-southeast-1_Ejs27x3A5"
+    COGNITO_CLIENT_ID: str = "7tphkcnkc63dtcb1o0kfsfbvot"
+    COGNITO_GROUPS_HEADER: str = "x-user-groups"
+    
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
